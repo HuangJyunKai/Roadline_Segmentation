@@ -11,6 +11,7 @@ from torchvision.transforms import transforms
 from torch.optim import lr_scheduler
 from ESPNET import ESPNet,ESPNet_Encoder
 from dataset import RoadDataset
+from metrics import RunningConfusionMatrix
 import numpy as np
 import PIL.Image as Image
 import matplotlib.pyplot as plt
@@ -36,10 +37,32 @@ y_transforms = transforms.Compose([
     #transforms.Resize((1080,1920)),#for ESPnet
     #transforms.ToTensor()
 ])
+nclass=12 # 0 background
+IGNORE_LABEL = 0
+Miou = RunningConfusionMatrix([i for i in range(1,nclass)])
+np.seterr(divide='ignore', invalid='ignore')
+def compute_pixel_acc(pred,gt,ignore_label=-1):
+    """
+    Args:
+        pred - np.array
+        gt - np.array
+        """
+    pixel_acc = None
+    if ignore_label != -1:
+        valid_mask = np.ones(gt.shape).astype(bool)
+        valid_mask[gt==ignore_label] = False
+        total = valid_mask.sum()
+        correct_pixel = (np.multiply(pred,valid_mask)==np.multiply(gt,valid_mask)).sum()-len(gt)+total
+        pixel_acc = correct_pixel.item() / total
+    else:
+        pixel_acc = (pred==gt).sum()/len(gt)
+    return pixel_acc
 def validation(epoch,model, criterion, optimizer, val_loader):
     model.eval()
     step=0
     epoch_loss = 0
+    epoch_mIOU = 0
+    epoch_acc = 0. 
     dt_size = len(val_loader.dataset)
     with torch.no_grad():
         for x, y in val_loader:
@@ -52,11 +75,22 @@ def validation(epoch,model, criterion, optimizer, val_loader):
             loss = criterion(outputs, labels)
             epoch_loss += loss.item()
             print("%d/%d,val_loss:%0.5f " % (step, len(val_loader), loss.item()))
+            #mIOU
+            output = torch.softmax(outputs,dim=1)
+            N, _, h, w = output.shape
+            pred = output.transpose(0, 2).transpose(3, 1).reshape(-1, nclass).argmax(axis=1).reshape(N, h, w) #class 12
+            pred = pred.squeeze(0).cpu().flatten()
+            target = y.squeeze(0).cpu().flatten()
+            Miou.update_matrix(target,pred)
+            acc = compute_pixel_acc(pred,target,ignore_label=IGNORE_LABEL)
+            epoch_acc += acc
+        val_miou = Miou.compute_current_mean_intersection_over_union()
+        pixel_acc = epoch_acc/step
         #print("epoch %d val_loss:%0.5f " % (epoch+1, epoch_loss/step))
-    return epoch_loss/step
+    return epoch_loss/step , val_miou , pixel_acc
 
 
-def train_model(model, criterion, optimizer, train_loader, validation_loader, scheduler,num_epochs=1):
+def train_model(model, criterion, optimizer, train_loader, validation_loader, scheduler,num_epochs=150):
     for epoch in range(num_epochs):
         #scheduler.step()
         print('Epoch {}/{}'.format(epoch+1, num_epochs))
@@ -64,7 +98,6 @@ def train_model(model, criterion, optimizer, train_loader, validation_loader, sc
         dt_size = len(train_loader.dataset)
         epoch_loss = 0
         step = 0
-
         #num_correct = 0
         for x, y in train_loader:
             num_correct = 0
@@ -81,17 +114,17 @@ def train_model(model, criterion, optimizer, train_loader, validation_loader, sc
             epoch_loss += loss.item()
 
             print("%d/%d,train_loss:%0.5f " % (step, len(train_loader), loss.item()))
-        
+            
         print("validation... epoch : %d"%(epoch+1))
-        val_loss = validation(epoch, model, criterion, optimizer, validation_loader)
-        print("epoch %d train_loss:%0.5f val_loss:%0.5f" % (epoch, epoch_loss/step,val_loss))
+        val_loss , val_mIOU ,val_pixel_acc= validation(epoch, model, criterion, optimizer, validation_loader)
+        print("epoch %d train_loss:%0.5f val_loss:%0.5f val_mIOU:%0.3f val_picel_acc:%0.3f%%" % (epoch+1, epoch_loss/step,val_loss,val_mIOU,val_pixel_acc*100))
         
-        fp = open("ESPNet_Line_epoch_%d.txt" % num_epochs, "a")
+        fp = open("ESPNet_Line_ignore_epoch_%d.txt" % num_epochs, "a")
         #fp.write("epoch %d loss:%0.5f \n" % (epoch+1, epoch_loss/step))
-        fp.write("epoch %d loss:%0.5f Val_loss:%0.5f\n" % (epoch+1, epoch_loss/step,val_loss))
+        fp.write("epoch %d train_loss:%0.5f val_loss:%0.5f val_mIOU:%0.3f val_picel_acc:%0.3f%% \n" % (epoch+1, epoch_loss/step,val_loss,val_mIOU,val_pixel_acc*100))
         fp.close()
         
-    torch.save(model.state_dict(), 'ESPNet_Line_weights_epoch_%d.pth' % num_epochs)
+    torch.save(model.state_dict(), 'ESPNet_Line_ignoreindex_weights_epoch_%d.pth' % num_epochs)
     return model
 
 #训练模型
@@ -103,7 +136,7 @@ def train(args):
     optimizer = optim.Adam(model.parameters(), weight_decay=1e-5)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)  # decay LR by a factor of 0.5 every 30 epochs
     #criterion = nn.BCEWithLogitsLoss()
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(ignore_index=IGNORE_LABEL)
     road_dataset= RoadDataset("./data/training/",transform=x_transforms,target_transform=y_transforms)
     #split training and validation
     validation_split = .2
@@ -147,11 +180,12 @@ def Generate(args):
         #img = img.view(1,3,1080,1920) #forreference
         img = img.to(device)
         with torch.no_grad():
-            output = model(img).to(device)
+            output = model(img)
             output = torch.softmax(output,dim=1)
             N, _, h, w = output.shape
             pred = output.transpose(0, 2).transpose(3, 1).reshape(-1, 12).argmax(axis=1).reshape(N, h, w) #class 12
             pred = pred.squeeze(0)
+            print(np.unique(pred.cpu()))
             Decode_image(pred,name)
     tEnd = time.time()#計時結束
     #列印結果
@@ -188,7 +222,7 @@ if __name__ == '__main__':
     parse=argparse.ArgumentParser()
     parse = argparse.ArgumentParser()
     parse.add_argument("action", type=str, help="train or test")
-    parse.add_argument("--batch_size", type=int, default=4)
+    parse.add_argument("--batch_size", type=int, default=24)
     parse.add_argument("--ckpt", type=str, help="the path of model weight file")
     args = parse.parse_args()
 
