@@ -161,8 +161,8 @@ def train(args):
     road_dataset= RoadDataset("./data/training/",transform=x_main,target_transform=y_main)
     road_dataset_scale1 = RoadDataset("./data/training/",transform=x_scale1,target_transform=y_scale1)
     road_dataset_scale2 = RoadDataset("./data/training/",transform=x_scale2,target_transform=y_scale2)
-    road_dataset_scale3 = RoadDataset("./data/training/",transform=x_scale1,target_transform=y_scale3)
-    road_dataset_scale4 = RoadDataset("./data/training/",transform=x_scale1,target_transform=y_scale4)
+    road_dataset_scale3 = RoadDataset("./data/training/",transform=x_scale3,target_transform=y_scale3)
+    road_dataset_scale4 = RoadDataset("./data/training/",transform=x_scale4,target_transform=y_scale4)
     road_dataset_val    = RoadDataset("./data/training/",transform=x_val,target_transform=y_val)
     #split training and validation
     validation_split = .2
