@@ -67,7 +67,7 @@ x_val = transforms.Compose([
     ])
 #y_transforms = transforms.ToTensor()
 y_main = transforms.Compose([
-    transforms.Resize((256,512)),]), 
+    transforms.Resize((256,512)),]) 
 y_scale1 = transforms.Compose([
     transforms.Resize((768,1536)),])
 y_scale2 = transforms.Compose([
@@ -114,8 +114,6 @@ def validation(epoch,model, criterion, optimizer, val_loader):
 def train_model(model, criterion, optimizer, train_loader, scheduler, epoch, num_epochs):
     iouEvalTrain = iouEval(nclass)
     #scheduler.step()
-    print('Epoch {}/{}'.format(epoch+1, num_epochs))
-    print('-' * 10)
     dt_size = len(train_loader.dataset)
     epoch_loss = 0
     step = 0
@@ -185,27 +183,40 @@ def train(args):
     validation_loader = DataLoader(road_dataset_val, batch_size=batch_size,sampler=valid_sampler)
     
     for epoch in range(num_epochs):
+        print("epoch: %d/%d" %(epoch+1,num_epochs)) 
+        print("scale : 768x1536")
         train_model(model, criterion, optimizer, train_loaderscale1, scheduler, epoch, num_epochs)
+        print("scale : 720x1280")
         train_model(model, criterion, optimizer, train_loaderscale2, scheduler, epoch, num_epochs)
+        print("scale : 512x1024")
         train_model(model, criterion, optimizer, train_loaderscale3, scheduler, epoch, num_epochs)
+        print("scale : 384x768")
         train_model(model, criterion, optimizer, train_loaderscale4, scheduler, epoch, num_epochs)
+        print("scale : 256x512")
         epoch_loss, overall_acc, per_class_acc, per_class_iou, mIOU = train_model(model, criterion, optimizer, train_loader,scheduler, epoch, num_epochs)
-        
+        print("scale : 256x512")
         valepoch_loss,valoverall_acc, valper_class_acc, valper_class_iou, valmIOU = validation(epoch, model, criterion, optimizer, validation_loader)
         
         fp = open("ESPNet_Line_multiscale_256_512_epoch_%d.txt" % num_epochs, "a")
-        #fp.write("epoch %d loss:%0.5f \n" % (epoch+1, epoch_loss/step))
-        fp.write("epoch %d train_loss:%0.5f \n" % (epoch+1, epoch_loss))
-        fp.write("train overall_acc ", overall_acc)
-        fp.write("train per_class_acc ", per_class_acc)
-        fp.write("train per_class_iou ", per_class_iou)
-        fp.write("train mIOU ", mIOU)
-        fp.write("epoch %d val_loss:%0.5f \n" % (epoch+1, valepoch_loss))
-        fp.write("val overall_acc ", valoverall_acc)
-        fp.write("val per_class_acc ", valper_class_acc)
-        fp.write("val per_class_iou ", valper_class_iou)
-        fp.write("val mIOU \n", valmIOU)
-        
+        fp.write("epoch %d train_loss:%0.3f \n" % (epoch+1, epoch_loss))
+        fp.write("train overall_acc:%0.3f \n"%(overall_acc))
+        fp.write("train per_class_acc: ")
+        fp.write(str(per_class_acc))
+        fp.write("\n")
+        fp.write("train per_class_iou: ")
+        fp.write(str(per_class_iou))
+        fp.write("\n")
+        fp.write("train mIOU:%0.3f\n"% (mIOU))
+        fp.write("epoch %d val_loss:%0.3f \n" % (epoch+1, valepoch_loss))
+        fp.write("val overall_acc:%0.3f \n" % (valoverall_acc))
+        fp.write("val per_class_acc: ")
+        fp.write(str(valper_class_acc))
+        fp.write("\n")
+        fp.write("vak per_class_iou: ")
+        fp.write(str(valper_class_iou))
+        fp.write("\n")
+        fp.write("val mIOU:%0.3f\n"% (valmIOU))
+        fp.write("\n")
         fp.close()
 def Val(args):
     model = ESPNet(12, p=2, q=3).to(device)
