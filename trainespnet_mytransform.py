@@ -23,6 +23,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 mean=[90.33802,92.7675,93.35951]
 std=[57.88047,57.541573,57.865982]
+classweights = np.array([ 1.4102876,10.443367,10.478665 , 10.480342 ,  8.17369  , 10.392894,
+  9.908393 , 10.019764 , 10.172403 , 10.418645  , 9.616669  , 9.481122 ])
+classweights = torch.from_numpy(classweights).float().to(device)
 trainDataset_main = myTransforms.Compose([
         myTransforms.Normalize(mean, std),
         myTransforms.Scale(512, 256),
@@ -145,7 +148,7 @@ def train_model(model, criterion, optimizer, train_loader, scheduler, epoch, num
     print("per_class_acc :",per_class_acc)
     print("per_class_iou :",per_class_iou)
     print("mIOU :",mIOU)
-    dirName = "./models/ESPNet_Line_mytransform_256_512/"
+    dirName = "./models/ESPNet_Line_mytransform_256_512_epoch150/"
     if not os.path.exists(dirName):
        os.mkdir(dirName)
        print("Directory " , dirName ,  " Created ")        
@@ -162,7 +165,7 @@ def train(args):
     optimizer = optim.Adam(model.parameters(), weight_decay=1e-5)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)  # decay LR by a factor of 0.5 every 30 epochs
     #criterion = nn.CrossEntropyLoss(ignore_index=IGNORE_LABEL,reduction='mean')
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(weight=classweights)
     road_dataset= MyDataset("./data/training/",transform=trainDataset_main)
     road_dataset_scale1 = MyDataset("./data/training/",transform=trainDataset_scale1)
     road_dataset_scale2 = MyDataset("./data/training/",transform=trainDataset_scale2)
