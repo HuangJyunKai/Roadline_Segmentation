@@ -21,8 +21,10 @@ import cv2
 # 是否使用cuda
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+mean=[90.33802,92.7675,93.35951]
+std=[57.88047,57.541573,57.865982]
 trainDataset_main = myTransforms.Compose([
-        myTransforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        myTransforms.Normalize(mean, std),
         myTransforms.Scale(512, 256),
         #myTransforms.RandomCropResize(32),
         myTransforms.RandomFlip(),
@@ -32,7 +34,7 @@ trainDataset_main = myTransforms.Compose([
     ])
 
 trainDataset_scale1 = myTransforms.Compose([
-        myTransforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        myTransforms.Normalize(mean, std),
         myTransforms.Scale(1536, 768), # 1536, 768
         myTransforms.RandomCropResize(100),
         myTransforms.RandomFlip(),
@@ -42,7 +44,7 @@ trainDataset_scale1 = myTransforms.Compose([
     ])
 
 trainDataset_scale2 = myTransforms.Compose([
-        myTransforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        myTransforms.Normalize(mean, std),
         myTransforms.Scale(1280, 720), # 1536, 768
         myTransforms.RandomCropResize(100),
         myTransforms.RandomFlip(),
@@ -52,7 +54,7 @@ trainDataset_scale2 = myTransforms.Compose([
     ])
 
 trainDataset_scale3 = myTransforms.Compose([
-        myTransforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        myTransforms.Normalize(mean, std),
         myTransforms.Scale(1024, 512),
         myTransforms.RandomCropResize(32),
         myTransforms.RandomFlip(),
@@ -62,7 +64,7 @@ trainDataset_scale3 = myTransforms.Compose([
     ])
 
 trainDataset_scale4 = myTransforms.Compose([
-        myTransforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        myTransforms.Normalize(mean, std),
         myTransforms.Scale(768, 384),
         myTransforms.RandomCropResize(20),
         myTransforms.RandomFlip(),
@@ -73,7 +75,7 @@ trainDataset_scale4 = myTransforms.Compose([
 
 
 valDataset = myTransforms.Compose([
-        myTransforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        myTransforms.Normalize(mean, std),
         myTransforms.Scale(512, 256),
         myTransforms.ToTensor(1),
         #
@@ -96,12 +98,13 @@ def validation(epoch,model, criterion, optimizer, val_loader):
             # zero the parameter gradients
             # forward
             outputs = model(inputs)
+            outputs = torch.softmax(outputs,dim=1)
             loss = criterion(outputs, labels)
             epoch_loss += loss.item()
             print("%d/%d,val_loss:%0.5f " % (step, len(val_loader), loss.item()))
             #mIOU
-            output = torch.softmax(outputs,dim=1)
-            iouEvalVal.addBatch(output.max(1)[1].data, labels.data)
+            
+            iouEvalVal.addBatch(outputs.max(1)[1].data, labels.data)
         overall_acc, per_class_acc, per_class_iou, mIOU = iouEvalVal.getMetric()
     print("epoch %d val_loss:%0.5f " % (epoch+1, epoch_loss/step))
     print("overall_acc :",overall_acc)
@@ -127,13 +130,14 @@ def train_model(model, criterion, optimizer, train_loader, scheduler, epoch, num
         optimizer.zero_grad()
         # forward
         outputs = model(inputs)
+        outputs = torch.softmax(outputs,dim=1)
         loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
         epoch_loss += loss.item()
             
-        output = torch.softmax(outputs,dim=1)
-        iouEvalTrain.addBatch(output.max(1)[1].data, labels.data)
+        
+        iouEvalTrain.addBatch(outputs.max(1)[1].data, labels.data)
             
         print("%d/%d,train_loss:%0.5f " % (step, len(train_loader), loss.item()))
     overall_acc, per_class_acc, per_class_iou, mIOU = iouEvalTrain.getMetric()
@@ -141,13 +145,16 @@ def train_model(model, criterion, optimizer, train_loader, scheduler, epoch, num
     print("per_class_acc :",per_class_acc)
     print("per_class_iou :",per_class_iou)
     print("mIOU :",mIOU)
-        
-    torch.save(model.state_dict(), 'ESPNet_Line_mytransfrom_256_512_weights_epoch_%d.pth' % num_epochs)
+    dirName = "./models/ESPNet_Line_mytransform_256_512/"
+    if not os.path.exists(dirName):
+       os.mkdir(dirName)
+       print("Directory " , dirName ,  " Created ")        
+    torch.save(model.state_dict(), dirName+'ESPNet_Line_mytransfrom_256_512_weights_epoch_%d.pth' % (epoch+1))
     return epoch_loss/step, overall_acc, per_class_acc, per_class_iou, mIOU
 
 #训练模型
 def train(args):
-    num_epochs = 30
+    num_epochs = 150
     step_size  = 50
     gamma      = 0.5
     model = ESPNet(12, p=2, q=3).to(device)
@@ -184,10 +191,10 @@ def train(args):
     
     for epoch in range(num_epochs):
         print("epoch: %d/%d" %(epoch+1,num_epochs)) 
-        #print("scale : 1536x768")
-        #train_model(model, criterion, optimizer, train_loaderscale1, scheduler, epoch, num_epochs)
-        #print("scale : 1280x720")
-        #train_model(model, criterion, optimizer, train_loaderscale2, scheduler, epoch, num_epochs)
+        print("scale : 1536x768")
+        train_model(model, criterion, optimizer, train_loaderscale1, scheduler, epoch, num_epochs)
+        print("scale : 1280x720")
+        train_model(model, criterion, optimizer, train_loaderscale2, scheduler, epoch, num_epochs)
         print("scale : 1024x512")
         train_model(model, criterion, optimizer, train_loaderscale3, scheduler, epoch, num_epochs)
         print("scale : 768x384")
@@ -248,25 +255,35 @@ def Generate(args):
     print("Generate...")
     import time
     tStart = time.time()
+    #mean = [72.3923111, 82.90893555, 73.15840149]
+    #std = [45.3192215, 46.15289307, 44.91483307]
+    #mean = [0.485, 0.456, 0.406]
+    #std=[0.229, 0.224, 0.225]
+    
     for filename in os.listdir(root):
         if filename == '.ipynb_checkpoints':
             continue
         imgroot=os.path.join(root+filename)
         name = filename[:-4]
         print("Image Processing: ",name)
-        img = Image.open(imgroot)
-        img = x_transforms(img)
-        img = img.view(1,3,256,512) #forreference
-        #img = img.view(1,3,1080,1920) #forreference
-        img = img.to(device)
-        with torch.no_grad():
-            output = model(img)
-            output = torch.softmax(output,dim=1)
-            N, _, h, w = output.shape
-            pred = output.transpose(0, 2).transpose(3, 1).reshape(-1, 12).argmax(axis=1).reshape(N, h, w) #class 12
-            pred = pred.squeeze(0)
-            print(np.unique(pred.cpu()))
-            Decode_image(pred,name)
+        img = cv2.imread(imgroot)
+        img = img.astype(np.float32)
+        for j in range(3):
+            img[:, :, j] -= mean[j]
+        for j in range(3):
+            img[:, :, j] /= std[j]
+        img = cv2.resize(img, (512, 256))
+        img /= 255
+        img = img.transpose((2, 0, 1))
+        img_tensor = torch.from_numpy(img)
+        img_tensor = torch.unsqueeze(img_tensor, 0)  # add a batch dimension
+        img_tensor = img_tensor.to(device)
+        
+        output = model(img_tensor)
+        #output = torch.softmax(output,dim=1)
+        pred = output[0].max(0)[1].byte().cpu().data.numpy()
+        print(np.unique(pred))
+        Decode_image(pred,name)
     tEnd = time.time()#計時結束
     #列印結果
     print ("It cost %f sec" % (tEnd - tStart))#會自動做近位
@@ -276,7 +293,6 @@ def Decode_image(img_n,name):
             [255, 0, 255], [128, 0, 128], [0, 64, 64], [0, 0, 0], [0, 0, 0], 
             [255, 0, 0], [0, 255, 0], [255, 0, 0], [0, 0, 255], [255, 255, 0], 
             [255, 0, 255]]
-    img_n = img_n.cpu()
     img_ans=np.zeros((img_n.shape[0],img_n.shape[1],3), dtype=np.int) #class 12
     for idx in range(len(pallete)):
         [b, g, r] = pallete[idx]
@@ -284,7 +300,7 @@ def Decode_image(img_n,name):
     im_ans = Image.fromarray(np.uint8(img_ans)).convert('RGB') 
     im_ans = cv2.cvtColor(np.array(im_ans),cv2.COLOR_RGB2BGR)         
     #return im_ans           
-    cv2.imwrite("./Result/"+name+"_espnet_pred_30_nojitter.png",im_ans)
+    cv2.imwrite("./Result/"+name+"_espnet_pred_27_mytransform.png",im_ans)
 if __name__ == '__main__':
     #参数解析
     parse=argparse.ArgumentParser()
