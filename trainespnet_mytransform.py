@@ -3,6 +3,7 @@ import torch
 import argparse
 import os
 import torchvision
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 from torchvision.utils import save_image
@@ -101,7 +102,7 @@ def validation(epoch,model, criterion, optimizer, val_loader):
             # zero the parameter gradients
             # forward
             outputs = model(inputs)
-            outputs = torch.softmax(outputs,dim=1)
+            outputs = F.log_softmax(outputs, dim=1)
             loss = criterion(outputs, labels)
             epoch_loss += loss.item()
             print("%d/%d,val_loss:%0.5f " % (step, len(val_loader), loss.item()))
@@ -133,7 +134,7 @@ def train_model(model, criterion, optimizer, train_loader, scheduler, epoch, num
         optimizer.zero_grad()
         # forward
         outputs = model(inputs)
-        outputs = torch.softmax(outputs,dim=1)
+        outputs = F.log_softmax(outputs, dim=1)
         loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
