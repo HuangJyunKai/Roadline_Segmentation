@@ -18,14 +18,16 @@ import numpy as np
 import PIL.Image as Image
 import matplotlib.pyplot as plt
 import cv2
-
+#labelcount[2348.  302.  129.  121.  544.  849.  377. 1518.  341.   39.  952.  747.]
 # 是否使用cuda
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-mean=[90.33802,92.7675,93.35951]
-std=[57.88047,57.541573,57.865982]
-classweights = np.array([ 1.4102876,10.443367,10.478665 , 10.480342 ,  8.17369  , 10.392894,
-  9.908393 , 10.019764 , 10.172403 , 10.418645  , 9.616669  , 9.481122 ])
+#mean=[90.33802,92.7675,93.35951]
+#std=[57.88047,57.541573,57.865982]
+mean = [0.485, 0.456, 0.406]
+std = [0.229, 0.224, 0.225]
+classweights = np.array([ 1.4106865, 10.443367,  10.478665  ,10.454783 , 8.17091  , 10.38163
+  ,9.908189  ,10.019764 , 10.172351 , 10.418645  , 9.616669  , 9.482269 ])
 classweights = torch.from_numpy(classweights).float().to(device)
 trainDataset_main = myTransforms.Compose([
         myTransforms.Normalize(mean, std),
@@ -149,11 +151,11 @@ def train_model(model, criterion, optimizer, train_loader, scheduler, epoch, num
     print("per_class_acc :",per_class_acc)
     print("per_class_iou :",per_class_iou)
     print("mIOU :",mIOU)
-    dirName = "./models/ESPNet_Line_mytransform_256_512_epoch150/"
+    dirName = "./models/ESPNet_Line_mytransform_full_256_512_epoch150/"
     if not os.path.exists(dirName):
        os.mkdir(dirName)
        print("Directory " , dirName ,  " Created ")        
-    torch.save(model.state_dict(), dirName+'ESPNet_Line_mytransfrom_256_512_weights_epoch_%d.pth' % (epoch+1))
+    torch.save(model.state_dict(), dirName+'ESPNet_Line_mytransfrom_full_256_512_weights_epoch_%d.pth' % (epoch+1))
     return epoch_loss/step, overall_acc, per_class_acc, per_class_iou, mIOU
 
 #训练模型
@@ -180,7 +182,7 @@ def train(args):
     indices = list(range(dataset_size))
     split = int(np.floor(validation_split * dataset_size))
     if shuffle_dataset :
-        #np.random.seed(random_seed)
+        #np.random.seed(42)
         np.random.shuffle(indices)
     train_indices, val_indices = indices[split:], indices[:split]
     train_sampler = SubsetRandomSampler(train_indices)
@@ -208,7 +210,7 @@ def train(args):
         print("scale : 512x256")
         valepoch_loss,valoverall_acc, valper_class_acc, valper_class_iou, valmIOU = validation(epoch, model, criterion, optimizer, validation_loader)
         
-        fp = open("ESPNet_Line_mytransform_256_512_epoch_%d.txt" % num_epochs, "a")
+        fp = open("ESPNet_Line_mytransform_full_256_512_epoch_%d.txt" % num_epochs, "a")
         fp.write("epoch %d train_loss:%0.3f \n" % (epoch+1, epoch_loss))
         fp.write("train overall_acc:%0.3f \n"%(overall_acc))
         fp.write("train per_class_acc: ")
@@ -294,7 +296,7 @@ def Generate(args):
 
 def Decode_image(img_n,name):
     pallete = [[0,0,0] , 
-            [255, 0, 255], [128, 0, 128], [0, 64, 64], [0, 0, 0], [0, 0, 0], 
+            [255, 0, 255], [128, 0, 128], [0, 64, 64], [255, 255, 255], [255, 255, 255], 
             [255, 0, 0], [0, 255, 0], [255, 0, 0], [0, 0, 255], [255, 255, 0], 
             [255, 0, 255]]
     img_ans=np.zeros((img_n.shape[0],img_n.shape[1],3), dtype=np.int) #class 12
@@ -304,7 +306,7 @@ def Decode_image(img_n,name):
     im_ans = Image.fromarray(np.uint8(img_ans)).convert('RGB') 
     im_ans = cv2.cvtColor(np.array(im_ans),cv2.COLOR_RGB2BGR)         
     #return im_ans           
-    cv2.imwrite("./Result/"+name+"_espnet_pred_27_mytransform.png",im_ans)
+    cv2.imwrite("./Result/"+name+"_espnet_pred_46_mytransform.png",im_ans)
 if __name__ == '__main__':
     #参数解析
     parse=argparse.ArgumentParser()

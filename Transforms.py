@@ -99,9 +99,11 @@ class RandomFlip(object):
 
 
 class Normalize(object):
-    """Given mean: (R, G, B) and std: (R, G, B),
+    """Given mean: (R,G,B) and std: (R,G,B),
     will normalize each channel of the torch.*Tensor, i.e.
     channel = (channel - mean) / std
+    
+
     """
 
     def __init__(self, mean, std):
@@ -113,13 +115,21 @@ class Normalize(object):
         self.std = std
 
     def __call__(self, image, label):
-        image = image.astype(np.float32)
+        #image = image.astype(np.float32)
+        img = image.copy()
+        img = np.asarray(img , dtype="float32" )
+        lab = label.copy()
+        lab = np.asarray(lab , dtype="float32" )
+        img = img/255
+        for j in range(3):
+            img[:, :, j] = (img[:, :, j]-self.mean[j])/self.std[j]
+        '''
         for i in range(3):
             image[:,:,i] -= self.mean[i]
         for i in range(3):
             image[:,:, i] /= self.std[i]
-
-        return [image, label]
+        '''
+        return [img, lab]
 
 class ToTensor(object):
     '''
@@ -140,7 +150,7 @@ class ToTensor(object):
 
         image = image.transpose((2,0,1))
 
-        image_tensor = torch.from_numpy(image).div(255)
+        image_tensor = torch.from_numpy(image)
         label_tensor =  torch.LongTensor(np.array(label, dtype=np.int)) #torch.from_numpy(label)
 
         return [image_tensor, label_tensor]
