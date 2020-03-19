@@ -19,12 +19,12 @@ import os
 color_full = {'sw' : ( 0 , 0 , 0), 'dr' : (255,255, 0 ), 'ud' : (0, 255 , 0 ),
               'zc' : ( 0 , 0 , 0), 'cl' : (255, 0, 0), 'rs' : ( 0 , 0 ,255), 'ys' : ( 0 ,255,255), 'yd' : (102,255,255),
               'ds' : ( 0 ,204,255), 'dd' : (102,204,255), 'ws' : ( 0 , 0 , 0 ), 'wd' : (102,153,153),
-              'pm' : (255,102, 0 ), 'pc' : ( 51,255,102), 'Pb' : (255, 51,153), 'pw' : (153,204,255), 'pl' : (204,255,255), 'pp': (102, 0 ,255)}
+              'pm' : (255,102, 0 ), 'pc' : ( 51,255,102), 'pb' : (255, 51,153), 'pw' : (153,204,255), 'pl' : (204,255,255), 'pp': (102, 0 ,255)}
 line_class = {'zc' : 5, 'cl' : 6 ,'rs' : 7 , 'ys' : 8, 'yd' : 8,
               'ds' : 9, 'dd' : 9 ,'ws' : 10, 'wd' : 11,
-              'pm' : 1, 'pc' : 2,'Pb' : 3, 'pw' : 4,'pl' : 4, 'pp': 0}
+              'pm' : 1, 'pc' : 2,'pb' : 3, 'pw' : 4,'pl' : 4, 'pp': 0}
 road_class = {'sw' : 1, 'dr' : 2 ,'ud' : 0 }            
-line = ['zc','cl','rs','ys','yd','ds','dd','ws','wd','pm','pc','Pb','pw','pl']
+line = ['zc','cl','rs','ys','yd','ds','dd','ws','wd','pm','pc','pb','pw','pl']
 road = ['sw','dr','ud']
 '''
 pallete_line = [ [255, 0, 255], [128, 0, 128], [0, 64, 64], [0, 0, 0], [0, 0, 0], \
@@ -122,7 +122,7 @@ def writepng(file,path,filename):
             cv2.imwrite(path + outfile +'_roadclass.png', roadzero)
 
 if __name__ == '__main__':
-    path = "./OV_002-Part2_OV_002_0001-linelabel/"
+    path = "./OV_001-1-linelabel/"
     if not os.path.isdir(path):
         os.mkdir(path)
     #root = ["./OV_001-Part2_OV_001_0001/"
@@ -130,7 +130,7 @@ if __name__ == '__main__':
             #"./OV_001-Part2_OV_001_0001-Segmentation/",
             #"./OV_001-Part3_OV_001_0001-Segmentation/","./OV_002-Part2_OV_002_0001-Segmentation/"
     #       ]
-    root = ["./OV_002-Part2_OV_002_0001/"]
+    root = ["./OV_001-1/"]
     for roots in root:
         print("open :",roots)
         for filename in os.listdir(roots):
