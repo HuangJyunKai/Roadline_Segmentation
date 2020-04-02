@@ -40,10 +40,11 @@ class MyDataset(torch.utils.data.Dataset):
     '''
     Class to load the dataset
     '''
-    def __init__(self, root, transform=None):
+    def __init__(self, root, transform=None, transform_ori=None):
         imgs = make_dataset(root)
         self.imgs = imgs
         self.transform = transform
+        self.transform_ori = transform_ori
 
     def __getitem__(self, index):
         '''
@@ -56,8 +57,25 @@ class MyDataset(torch.utils.data.Dataset):
         #label = cv2.imread(y_path, 0)
         image = Image.open(x_path).convert('RGB')
         label = Image.open(y_path).convert('L')
+        orignal_image = image.copy()
+        orignal_label = label.copy()
+        
         if self.transform:
-            [image, label] = self.transform(image, label)
-        return (image, label)
+            [aug_image, label] = self.transform(image, label)
+        if self.transform_ori:
+            [orignal_image,_] = self.transform_ori(orignal_image, orignal_label)
+        return aug_image, label, orignal_image
     def __len__(self):
         return len(self.imgs)
+def collate_fn(batch):
+    images = list()
+    labels = list()
+    for i in batch:
+        images.append(i[0])
+        images.append(i[2])
+        
+        labels.append(i[1])
+        labels.append(i[1])
+    images = torch.stack(images,dim=0)
+    labels = torch.stack(labels)
+    return images , labels

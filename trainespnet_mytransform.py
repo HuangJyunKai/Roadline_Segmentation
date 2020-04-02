@@ -1,4 +1,5 @@
 #For road segmentation
+import random
 import torch
 import argparse
 import os
@@ -11,7 +12,7 @@ from torch import nn, optim
 from torchvision.transforms import transforms
 from torch.optim import lr_scheduler
 from ESPNET import ESPNet,ESPNet_Encoder
-from DataSet import MyDataset
+from DataSet import MyDataset , collate_fn
 import Transforms as myTransforms
 from IOUEval import iouEval
 import numpy as np
@@ -26,59 +27,91 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #std=[57.88047,57.541573,57.865982]
 mean = [0.485, 0.456, 0.406]
 std = [0.229, 0.224, 0.225]
+_IMAGENET_PCA = {
+    'eigval': torch.Tensor([0.2175, 0.0188, 0.0045]),
+    'eigvec': torch.Tensor([
+        [-0.5675,  0.7192,  0.4009],
+        [-0.5808, -0.0045, -0.8140],
+        [-0.5836, -0.6948,  0.4203],
+    ])}
+
 classweights = np.array([ 1.4106865, 10.443367,  10.478665  ,10.454783 , 8.17091  , 10.38163
   ,9.908189  ,10.019764 , 10.172351 , 10.418645  , 9.616669  , 9.482269 ])
 classweights = torch.from_numpy(classweights).float().to(device)
 trainDataset_main = myTransforms.Compose([
+        myTransforms.ColorJitter(brightness=random.uniform(0.1,0.5), contrast=random.uniform(0.1,0.5)),
         myTransforms.Normalize(mean, std),
         myTransforms.Scale(512, 256),
         #myTransforms.RandomCropResize(32),
         myTransforms.RandomFlip(),
         #myTransforms.RandomCrop(64).
         myTransforms.ToTensor(1),
+        #myTransforms.Lighting(0.1, _IMAGENET_PCA['eigval'], _IMAGENET_PCA['eigvec']),
         #
     ])
+trainDataset_main_ori = myTransforms.Compose([
+    myTransforms.Normalize(mean, std),myTransforms.Scale(512, 256),myTransforms.ToTensor(1)
+])
 
 trainDataset_scale1 = myTransforms.Compose([
+        myTransforms.ColorJitter(brightness=random.uniform(0.1,0.5), contrast=random.uniform(0.1,0.5)),
         myTransforms.Normalize(mean, std),
         myTransforms.Scale(1536, 768), # 1536, 768
         myTransforms.RandomCropResize(100),
         myTransforms.RandomFlip(),
         #myTransforms.RandomCrop(64),
         myTransforms.ToTensor(1),
+        #myTransforms.Lighting(0.1, _IMAGENET_PCA['eigval'], _IMAGENET_PCA['eigvec']),
         #
     ])
+trainDataset_scale1_ori = myTransforms.Compose([
+    myTransforms.Normalize(mean, std),myTransforms.Scale(1536, 768),myTransforms.ToTensor(1)
+])
 
 trainDataset_scale2 = myTransforms.Compose([
+        myTransforms.ColorJitter(brightness=random.uniform(0.1,0.5), contrast=random.uniform(0.1,0.5)),
         myTransforms.Normalize(mean, std),
         myTransforms.Scale(1280, 720), # 1536, 768
         myTransforms.RandomCropResize(100),
         myTransforms.RandomFlip(),
         #myTransforms.RandomCrop(64),
         myTransforms.ToTensor(1),
+        #myTransforms.Lighting(0.1, _IMAGENET_PCA['eigval'], _IMAGENET_PCA['eigvec']),
         #
     ])
+trainDataset_scale2_ori = myTransforms.Compose([
+    myTransforms.Normalize(mean, std),myTransforms.Scale(1280, 720),myTransforms.ToTensor(1)
+])
 
 trainDataset_scale3 = myTransforms.Compose([
+        myTransforms.ColorJitter(brightness=random.uniform(0.1,0.5), contrast=random.uniform(0.1,0.5)),
         myTransforms.Normalize(mean, std),
         myTransforms.Scale(1024, 512),
         myTransforms.RandomCropResize(32),
         myTransforms.RandomFlip(),
         #myTransforms.RandomCrop(64),
         myTransforms.ToTensor(1),
+        #myTransforms.Lighting(0.1, _IMAGENET_PCA['eigval'], _IMAGENET_PCA['eigvec']),
         #
     ])
+trainDataset_scale3_ori = myTransforms.Compose([
+    myTransforms.Normalize(mean, std),myTransforms.Scale(1024, 512),myTransforms.ToTensor(1)
+])
 
 trainDataset_scale4 = myTransforms.Compose([
+        myTransforms.ColorJitter(brightness=random.uniform(0.1,0.5), contrast=random.uniform(0.1,0.5)),
         myTransforms.Normalize(mean, std),
         myTransforms.Scale(768, 384),
         myTransforms.RandomCropResize(20),
         myTransforms.RandomFlip(),
         #myTransforms.RandomCrop(64).
         myTransforms.ToTensor(1),
+        #myTransforms.Lighting(0.1, _IMAGENET_PCA['eigval'], _IMAGENET_PCA['eigvec']),
         #
     ])
-
+trainDataset_scale4_ori = myTransforms.Compose([
+    myTransforms.Normalize(mean, std),myTransforms.Scale(768, 384),myTransforms.ToTensor(1)
+])
 
 valDataset = myTransforms.Compose([
         myTransforms.Normalize(mean, std),
@@ -86,6 +119,9 @@ valDataset = myTransforms.Compose([
         myTransforms.ToTensor(1),
         #
     ])
+valDataset_ori = myTransforms.Compose([
+    myTransforms.Normalize(mean, std),myTransforms.Scale(512, 256),myTransforms.ToTensor(1)
+])
 nclass=12 # 0 background
 IGNORE_LABEL = 0
 def validation(epoch,model, criterion, optimizer, val_loader):
@@ -128,7 +164,6 @@ def train_model(model, criterion, optimizer, train_loader, scheduler, epoch, num
     step = 0
     #num_correct = 0
     for x, y in train_loader:
-        num_correct = 0
         step += 1
         inputs = x.to(device)
         labels = y.to(device)
@@ -151,11 +186,11 @@ def train_model(model, criterion, optimizer, train_loader, scheduler, epoch, num
     print("per_class_acc :",per_class_acc)
     print("per_class_iou :",per_class_iou)
     print("mIOU :",mIOU)
-    dirName = "./models/ESPNet_Line_mytransform_full_256_512_epoch150/"
+    dirName = "./models/ESPNet_Line_mytransform_fullcj3_256_512_epoch150/"
     if not os.path.exists(dirName):
        os.mkdir(dirName)
        print("Directory " , dirName ,  " Created ")        
-    torch.save(model.state_dict(), dirName+'ESPNet_Line_mytransfrom_full_256_512_weights_epoch_%d.pth' % (epoch+1))
+    torch.save(model.state_dict(), dirName+'ESPNet_Line_mytransfrom_fullcj3_256_512_weights_epoch_%d.pth' % (epoch+1))
     return epoch_loss/step, overall_acc, per_class_acc, per_class_iou, mIOU
 
 #训练模型
@@ -169,12 +204,12 @@ def train(args):
     scheduler = lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)  # decay LR by a factor of 0.5 every 30 epochs
     #criterion = nn.CrossEntropyLoss(ignore_index=IGNORE_LABEL,reduction='mean')
     criterion = nn.CrossEntropyLoss(weight=classweights)
-    road_dataset= MyDataset("./data/training/",transform=trainDataset_main)
-    road_dataset_scale1 = MyDataset("./data/training/",transform=trainDataset_scale1)
-    road_dataset_scale2 = MyDataset("./data/training/",transform=trainDataset_scale2)
-    road_dataset_scale3 = MyDataset("./data/training/",transform=trainDataset_scale3)
-    road_dataset_scale4 = MyDataset("./data/training/",transform=trainDataset_scale4)
-    road_dataset_val    = MyDataset("./data/training/",transform=valDataset)
+    road_dataset= MyDataset("./data/training/",transform=trainDataset_main,transform_ori=trainDataset_main_ori)
+    road_dataset_scale1 = MyDataset("./data/training/",transform=trainDataset_scale1,transform_ori=trainDataset_scale1_ori)
+    road_dataset_scale2 = MyDataset("./data/training/",transform=trainDataset_scale2,transform_ori=trainDataset_scale2_ori)
+    road_dataset_scale3 = MyDataset("./data/training/",transform=trainDataset_scale3,transform_ori=trainDataset_scale3_ori)
+    road_dataset_scale4 = MyDataset("./data/training/",transform=trainDataset_scale4,transform_ori=trainDataset_scale4_ori)
+    road_dataset_val    = MyDataset("./data/training/",transform=valDataset,transform_ori=valDataset_ori)
     #split training and validation
     validation_split = .2
     shuffle_dataset = True
@@ -188,12 +223,12 @@ def train(args):
     train_sampler = SubsetRandomSampler(train_indices)
     valid_sampler = SubsetRandomSampler(val_indices)
     #multi-scale dataloader
-    train_loader = DataLoader(road_dataset, batch_size=batch_size, sampler=train_sampler)
-    train_loaderscale1 = DataLoader(road_dataset_scale1, batch_size=batch_size, sampler=train_sampler)
-    train_loaderscale2 = DataLoader(road_dataset_scale2, batch_size=batch_size, sampler=train_sampler)
-    train_loaderscale3 = DataLoader(road_dataset_scale3, batch_size=batch_size, sampler=train_sampler)
-    train_loaderscale4 = DataLoader(road_dataset_scale4, batch_size=batch_size, sampler=train_sampler)
-    validation_loader = DataLoader(road_dataset_val, batch_size=batch_size,sampler=valid_sampler)
+    train_loader = DataLoader(road_dataset, batch_size=batch_size, sampler=train_sampler,collate_fn=collate_fn)
+    train_loaderscale1 = DataLoader(road_dataset_scale1, batch_size=batch_size, sampler=train_sampler,collate_fn=collate_fn)
+    train_loaderscale2 = DataLoader(road_dataset_scale2, batch_size=batch_size, sampler=train_sampler,collate_fn=collate_fn)
+    train_loaderscale3 = DataLoader(road_dataset_scale3, batch_size=batch_size, sampler=train_sampler,collate_fn=collate_fn)
+    train_loaderscale4 = DataLoader(road_dataset_scale4, batch_size=batch_size, sampler=train_sampler,collate_fn=collate_fn)
+    validation_loader = DataLoader(road_dataset_val, batch_size=batch_size,sampler=valid_sampler,collate_fn=collate_fn)
     
     for epoch in range(num_epochs):
         print("epoch: %d/%d" %(epoch+1,num_epochs)) 
@@ -210,7 +245,7 @@ def train(args):
         print("scale : 512x256")
         valepoch_loss,valoverall_acc, valper_class_acc, valper_class_iou, valmIOU = validation(epoch, model, criterion, optimizer, validation_loader)
         
-        fp = open("ESPNet_Line_mytransform_full_256_512_epoch_%d.txt" % num_epochs, "a")
+        fp = open("ESPNet_Line_mytransform_fullcj3_256_512_epoch_%d.txt" % num_epochs, "a")
         fp.write("epoch %d train_loss:%0.3f \n" % (epoch+1, epoch_loss))
         fp.write("train overall_acc:%0.3f \n"%(overall_acc))
         fp.write("train per_class_acc: ")
@@ -312,7 +347,7 @@ if __name__ == '__main__':
     parse=argparse.ArgumentParser()
     parse = argparse.ArgumentParser()
     parse.add_argument("action", type=str, help="train or test")
-    parse.add_argument("--batch_size", type=int, default=16)
+    parse.add_argument("--batch_size", type=int, default=12)
     parse.add_argument("--ckpt", type=str, help="the path of model weight file")
     args = parse.parse_args()
 
