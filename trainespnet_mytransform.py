@@ -266,27 +266,6 @@ def train(args):
         fp.write("val mIOU:%0.3f\n"% (valmIOU))
         fp.write("\n")
         fp.close()
-def Val(args):
-    model = ESPNet(12, p=2, q=3).to(device)
-    model.load_state_dict(torch.load(args.ckpt,map_location='cpu'))
-    batch_size = args.batch_size
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), weight_decay=1e-5)
-    road_dataset= RoadDataset("./data/training/",transform=x_transforms,target_transform=y_transforms)
-    validation_split = .2
-    shuffle_dataset = True
-    dataset_size = len(road_dataset)
-    indices = list(range(dataset_size))
-    split = int(np.floor(validation_split * dataset_size))
-    if shuffle_dataset :
-        np.random.seed(42)
-        np.random.shuffle(indices)
-    train_indices, val_indices = indices[split:], indices[:split]
-    valid_sampler = SubsetRandomSampler(val_indices)
-    validation_loader = DataLoader(road_dataset, batch_size=batch_size,
-                                                sampler=valid_sampler)
-    overall_acc, per_class_acc, per_class_iu, mIOU = validation(1, model, criterion, optimizer, validation_loader)
-    print("overall_acc:%0.3f per_class_acc:%0.3f per_class_iu:%0.3f, mIOU:%0.3f"%(overall_acc, per_class_acc, per_class_iu, mIOU))
 def Generate(args):
     model = ESPNet(12, p=2, q=3).to(device)
     model.load_state_dict(torch.load(args.ckpt,map_location='cpu'))
@@ -363,8 +342,7 @@ if __name__ == '__main__':
         oonx(args)
     elif args.action=="check":
         check_label(args)
-    elif args.action=="iou":
-        Val(args)
+
         
 
 
