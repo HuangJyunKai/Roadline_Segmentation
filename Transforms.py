@@ -244,7 +244,7 @@ class RamdomNoise(object):
             image = Image.fromarray(np.unit8(image))
         return [image , label]
     
-class RGBlinearcorrection(object):
+class Gammacorrection(object):
     def __init__(self,value,prob=0.3):
         self.value = value
         self.prob = prob
