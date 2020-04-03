@@ -150,6 +150,7 @@ class RandomFlip(object):
                 image = cv2.flip(image, 1) # veritcal flip
                 label = cv2.flip(label, 1)  # veritcal flip
         return [image, label]
+    
 class ColorJitter(object):
     def __init__(self, brightness=0, contrast=0, saturation=0, hue=0):
         self.brightness = self._check_input(brightness, 'brightness')
@@ -229,6 +230,34 @@ class ColorJitter(object):
         format_string += ', hue={0})'.format(self.hue)
         return format_string
 
+class RamdomNoise(object):
+    def __init__(self,noise_value=30, prob=30):
+        self.noise_value = noise_value
+        self.prob = prob
+    def __call__(self, image, label):
+        if random.random() < self.prob:
+            width, height = image.size
+            noise = np.random.randint(-self.noise_value, self.noise_value)
+            image = np.array(image, dtype= np.float32)
+            image += noise
+            image = np.clip(image,0,255)
+            image = Image.fromarray(np.unit8(image))
+        return [image , label]
+    
+class RGBlinearcorrection(object):
+    def __init__(self,value,prob=0.3):
+        self.value = value
+        self.prob = prob
+    def __call__(self, image, label):
+        if random.random()<self.prob:
+            select_nch = ranfom.randint(1,3)
+            select_chs = random.sample([0,1,2], k=select_nch)
+            image = np.array(image)
+            for select_ch in select_chs:
+                image[:,:,select_ch]=image[:,:,select_ch]*self.value
+            return [Image.fromarray(np.unit8(image)),label]
+        else:
+            return [image, label]
 class Normalize(object):
     """Given mean: (R,G,B) and std: (R,G,B),
     will normalize each channel of the torch.*Tensor, i.e.
